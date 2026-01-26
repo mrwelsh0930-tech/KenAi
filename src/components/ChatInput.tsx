@@ -1,0 +1,179 @@
+"use client";
+
+import { useState, useRef, useCallback } from "react";
+
+interface ChatInputProps {
+  onSend: (message: string, image?: string) => void;
+  isLoading: boolean;
+  placeholder?: string;
+}
+
+export function ChatInput({
+  onSend,
+  isLoading,
+  placeholder = "Describe your issue or ask a question...",
+}: ChatInputProps) {
+  const [message, setMessage] = useState("");
+  const [image, setImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (!file.type.startsWith("image/")) {
+        alert("Please select an image file");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImage(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    },
+    []
+  );
+
+  const handleSubmit = useCallback(() => {
+    if ((!message.trim() && !image) || isLoading) return;
+
+    onSend(message.trim(), image || undefined);
+    setMessage("");
+    setImage(null);
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, [message, image, isLoading, onSend]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleSubmit();
+      }
+    },
+    [handleSubmit]
+  );
+
+  const removeImage = useCallback(() => {
+    setImage(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, []);
+
+  return (
+    <div className="border-t border-gray-200 bg-white p-4">
+      {/* Image preview */}
+      {image && (
+        <div className="mb-3 relative inline-block">
+          <img
+            src={image}
+            alt="To attach"
+            className="max-h-32 rounded-lg border border-gray-200"
+          />
+          <button
+            onClick={removeImage}
+            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+            aria-label="Remove image"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-end gap-2">
+        {/* Image attach button */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isLoading}
+          className="flex-shrink-0 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Attach image"
+        >
+          <svg
+            className="w-6 h-6"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+        </button>
+
+        {/* Text input */}
+        <textarea
+          ref={textareaRef}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={isLoading}
+          rows={1}
+          className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-gray-900 bg-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed"
+          style={{ minHeight: "48px", maxHeight: "120px" }}
+        />
+
+        {/* Send button */}
+        <button
+          onClick={handleSubmit}
+          disabled={isLoading || (!message.trim() && !image)}
+          className="flex-shrink-0 bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        >
+          {isLoading ? (
+            <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24">
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+                fill="none"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              />
+            </svg>
+          ) : (
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+              />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      <p className="text-xs text-gray-400 mt-2 text-center">
+        Press Enter to send, Shift+Enter for new line. Attach photos anytime.
+      </p>
+    </div>
+  );
+}

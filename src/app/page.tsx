@@ -1,97 +1,105 @@
 "use client";
 
-import { useState } from "react";
-import { ImageUpload } from "@/components/ImageUpload";
-import { AnalysisResult } from "@/components/AnalysisResult";
+import { useState, useRef, useEffect } from "react";
+import { ChatMessage } from "@/components/ChatMessage";
+import { ChatInput } from "@/components/ChatInput";
 
-interface Analysis {
-  issueIdentified?: string;
-  confidence?: "High" | "Medium" | "Low";
-  confidenceExplanation?: string;
-  isDIYEligible?: boolean;
-  diyConfidence?: "High" | "Medium" | "Low";
-  reasoning?: string;
-  safetyWarnings?: string[];
-  clarifyingQuestions?: string[];
-  instructions?: Array<{
-    step: number;
-    title: string;
-    description: string;
-    warning?: string;
-  }>;
-  materials?: Array<{
-    item: string;
-    estimatedCost: string;
-    notes?: string;
-  }>;
-  estimatedTime?: string;
-  whenToCallPro?: string;
-  needsMoreInfo?: boolean;
-  whatYouCanSee?: string;
-  rawResponse?: string;
-  parseError?: boolean;
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+  image?: string;
 }
 
+const WELCOME_MESSAGE: Message = {
+  role: "assistant",
+  content: `Hi! I'm KenAI, your home maintenance assistant. I'm here to help you figure out what's going on and whether you can fix it yourself—or if you should call a pro.
+
+**Before we dive in, tell me:**
+- What's the issue you're dealing with?
+- When did you first notice it?
+- Is it getting worse?
+
+Feel free to attach a photo if you have one—but describe the problem in your own words first. The more detail you give me, the better I can help.`,
+};
+
 export default function Home() {
+  const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [isLoading, setIsLoading] = useState(false);
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [userContext, setUserContext] = useState("");
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleImageSelect = (imageDataUrl: string) => {
-    setSelectedImage(imageDataUrl);
-    setAnalysis(null);
-    setError(null);
-  };
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
-  const handleAnalyze = async () => {
-    if (!selectedImage) return;
+  const handleSend = async (content: string, image?: string) => {
+    if (!content.trim() && !image) return;
 
+    // Add user message
+    const userMessage: Message = {
+      role: "user",
+      content: content || "(attached image)",
+      image,
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
-    setError(null);
-    setAnalysis(null);
 
     try {
-      const response = await fetch("/api/analyze", {
+      // Send all messages (except the welcome message) to the API
+      const conversationHistory = [...messages.slice(1), userMessage];
+
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          image: selectedImage,
-          userContext: userContext.trim() || undefined,
+          messages: conversationHistory,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to analyze image");
+        throw new Error(data.error || "Failed to get response");
       }
 
-      setAnalysis(data.analysis);
+      // Add assistant response
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: data.response,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An error occurred");
+      const errorMessage =
+        err instanceof Error ? err.message : "Something went wrong";
+
+      // Add error as a system message
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `**Error:** ${errorMessage}\n\nPlease try again. If the problem persists, check your internet connection.`,
+        },
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleReset = () => {
-    setSelectedImage(null);
-    setAnalysis(null);
-    setError(null);
-    setUserContext("");
+  const handleNewChat = () => {
+    setMessages([WELCOME_MESSAGE]);
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+      <header className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-3">
+        <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
               <svg
                 className="w-6 h-6 text-white"
                 fill="none"
@@ -107,156 +115,77 @@ export default function Home() {
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                Home Fix KenAI
-              </h1>
-              <p className="text-sm text-gray-500">
-                AI-powered home maintenance assistant
-              </p>
+              <h1 className="text-lg font-bold text-gray-900">KenAI</h1>
+              <p className="text-xs text-gray-500">Home Maintenance Assistant</p>
             </div>
           </div>
+
+          <button
+            onClick={handleNewChat}
+            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            New Chat
+          </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-        <div className="space-y-6">
-          {/* Upload Section */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-lg font-semibold mb-4">
-              Upload a Photo of Your Issue
-            </h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Take a clear photo of the household issue you&apos;d like help
-              with. The more detail visible, the better I can assist.
-            </p>
-
-            <ImageUpload
-              onImageSelect={handleImageSelect}
-              isLoading={isLoading}
+      {/* Chat messages */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 py-6">
+          {messages.map((msg, index) => (
+            <ChatMessage
+              key={index}
+              role={msg.role}
+              content={msg.content}
+              image={msg.image}
             />
+          ))}
 
-            {selectedImage && (
-              <div className="mt-4 space-y-4">
-                {/* Context Input */}
-                <div>
-                  <label
-                    htmlFor="context"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Additional Context (optional)
-                  </label>
-                  <textarea
-                    id="context"
-                    rows={2}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white placeholder-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    placeholder="E.g., 'This leak started 2 days ago' or 'I have basic tools but no plumbing experience'"
-                    value={userContext}
-                    onChange={(e) => setUserContext(e.target.value)}
-                    disabled={isLoading}
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    The more details you provide, the more accurate my
-                    assessment will be.
-                  </p>
+          {isLoading && (
+            <div className="flex justify-start mb-4">
+              <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <div className="flex gap-1">
+                    <span
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "0ms" }}
+                    />
+                    <span
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "150ms" }}
+                    />
+                    <span
+                      className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                      style={{ animationDelay: "300ms" }}
+                    />
+                  </div>
+                  <span className="text-sm">Thinking...</span>
                 </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={handleAnalyze}
-                    disabled={isLoading}
-                    className="flex-1 bg-blue-500 text-white px-4 py-2 rounded-md font-medium hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                  >
-                    {isLoading ? (
-                      <>
-                        <svg
-                          className="animate-spin h-5 w-5"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                            fill="none"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                          />
-                        </svg>
-                        Analyze Issue
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={handleReset}
-                    disabled={isLoading}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md font-medium hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Start Over
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Error Display */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex items-center gap-2">
-                <svg
-                  className="w-5 h-5 text-red-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <p className="text-red-700">{error}</p>
               </div>
             </div>
           )}
 
-          {/* Results */}
-          {analysis && <AnalysisResult analysis={analysis} />}
-
-          {/* Disclaimer */}
-          <div className="text-center text-xs text-gray-400 py-4">
-            <p>
-              This tool provides general guidance only. Always prioritize safety
-              and consult a licensed professional for electrical, gas,
-              structural, or complex repairs.
-            </p>
-          </div>
+          <div ref={messagesEndRef} />
         </div>
-      </main>
+      </div>
+
+      {/* Disclaimer */}
+      {messages.length <= 1 && (
+        <div className="flex-shrink-0 text-center text-xs text-gray-400 px-4 pb-2">
+          This tool provides guidance only. Always prioritize safety and consult
+          a licensed professional for electrical, gas, structural, or complex
+          repairs.
+        </div>
+      )}
+
+      {/* Chat input */}
+      <div className="flex-shrink-0 max-w-3xl mx-auto w-full">
+        <ChatInput
+          onSend={handleSend}
+          isLoading={isLoading}
+          placeholder="Describe your issue or respond to KenAI..."
+        />
+      </div>
     </div>
   );
 }
