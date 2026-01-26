@@ -1,7 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
-const anthropic = new Anthropic();
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
 const SYSTEM_PROMPT = `You are a conservative, safety-first home maintenance assistant. Your job is to help homeowners identify household issues and determine if they can safely fix them themselves.
 
@@ -132,6 +134,27 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error("Error analyzing image:", error);
+
+    // Return more specific error messages
+    if (error instanceof Error) {
+      if (error.message.includes("API key")) {
+        return NextResponse.json(
+          { error: "API key configuration error. Please check the ANTHROPIC_API_KEY environment variable." },
+          { status: 500 }
+        );
+      }
+      if (error.message.includes("rate limit")) {
+        return NextResponse.json(
+          { error: "Rate limit exceeded. Please try again in a moment." },
+          { status: 429 }
+        );
+      }
+      return NextResponse.json(
+        { error: `Analysis failed: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to analyze image" },
       { status: 500 }
