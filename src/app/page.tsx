@@ -3,28 +3,33 @@
 import { useState, useRef, useEffect } from "react";
 import { ChatMessage } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
+import { ProgressIndicator } from "@/components/ProgressIndicator";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   image?: string;
+  suggestions?: string[];
 }
 
 const WELCOME_MESSAGE: Message = {
   role: "assistant",
   content: `Hi! I'm KenAI, your home maintenance assistant. I'm here to help you figure out what's going on and whether you can fix it yourself—or if you should call a pro.
 
-**Before we dive in, tell me:**
-- What's the issue you're dealing with?
-- When did you first notice it?
-- Is it getting worse?
-
-Feel free to attach a photo if you have one—but describe the problem in your own words first. The more detail you give me, the better I can help.`,
+**Let's start simple:** What's the issue you're dealing with?`,
+  suggestions: [
+    "Something is leaking",
+    "I hear a strange noise",
+    "Something looks broken",
+    "Not sure what's wrong",
+  ],
 };
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState(1);
+  const [phaseLabel, setPhaseLabel] = useState("Information Gathering");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -65,10 +70,18 @@ export default function Home() {
         throw new Error(data.error || "Failed to get response");
       }
 
+      // Update phase info
+      if (data.phase !== undefined) {
+        setCurrentPhase(data.phase);
+      }
+      if (data.phaseLabel) {
+        setPhaseLabel(data.phaseLabel);
+      }
       // Add assistant response
       const assistantMessage: Message = {
         role: "assistant",
         content: data.response,
+        suggestions: data.suggestions,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -89,8 +102,14 @@ export default function Home() {
     }
   };
 
+  const handleSuggestionClick = (suggestion: string) => {
+    handleSend(suggestion);
+  };
+
   const handleNewChat = () => {
     setMessages([WELCOME_MESSAGE]);
+    setCurrentPhase(1);
+    setPhaseLabel("Information Gathering");
   };
 
   return (
@@ -129,6 +148,18 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Progress Indicator */}
+      {messages.length > 1 && (
+        <div className="flex-shrink-0 px-4 py-2 bg-gray-50">
+          <div className="max-w-3xl mx-auto">
+            <ProgressIndicator
+              currentPhase={currentPhase}
+              phaseLabel={phaseLabel}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Chat messages */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-4 py-6">
@@ -138,6 +169,11 @@ export default function Home() {
               role={msg.role}
               content={msg.content}
               image={msg.image}
+              suggestions={msg.suggestions}
+              onSuggestionClick={handleSuggestionClick}
+              showSuggestions={
+                index === messages.length - 1 && !isLoading && msg.role === "assistant"
+              }
             />
           ))}
 
