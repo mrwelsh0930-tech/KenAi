@@ -11,11 +11,20 @@ interface AnalysisMessage {
   flagLabel?: string | null;
 }
 
+interface SavedQuote {
+  userContent: string;
+  analysisContent: string;
+  flag: "green" | "yellow" | "red";
+  flagLabel: string;
+}
+
 export function ContractorAnalyzer() {
   const [messages, setMessages] = useState<AnalysisMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([]);
+  const [isComparing, setIsComparing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -93,6 +102,20 @@ export function ContractorAnalyzer() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Track flagged analyses for comparison
+      if (data.flag && data.flagLabel) {
+        setSavedQuotes((prev) => [
+          ...prev,
+          {
+            userContent: userMessage.content,
+            analysisContent: data.response,
+            flag: data.flag,
+            flagLabel: data.flagLabel,
+          },
+        ]);
+        setIsComparing(false); // Allow re-comparison if new quote added
+      }
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Something went wrong";
@@ -118,10 +141,66 @@ export function ContractorAnalyzer() {
     [handleSubmit]
   );
 
+  const handleCompare = useCallback(async () => {
+    if (savedQuotes.length < 2 || isLoading) return;
+
+    setIsComparing(true);
+    setIsLoading(true);
+
+    const compareMessage: AnalysisMessage = {
+      role: "user",
+      content: `Compare my ${savedQuotes.length} quotes side by side`,
+    };
+    setMessages((prev) => [...prev, compareMessage]);
+
+    try {
+      const response = await fetch("/api/compare-quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quotes: savedQuotes.map((q, i) => ({
+            label: `Quote ${i + 1}`,
+            userContent: q.userContent,
+            analysisContent: q.analysisContent,
+            flag: q.flag,
+            flagLabel: q.flagLabel,
+          })),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Comparison failed");
+
+      const comparisonMessage: AnalysisMessage = {
+        role: "assistant",
+        content: data.response,
+        flag: "green",
+        flagLabel: data.recommendationLabel || "Comparison Complete",
+      };
+
+      setMessages((prev) => [...prev, comparisonMessage]);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Something went wrong";
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `**Error:** ${errorMessage}\n\nPlease try again.`,
+        },
+      ]);
+      setIsComparing(false);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [savedQuotes, isLoading]);
+
   const handleReset = () => {
     setMessages([]);
     setInputText("");
     setImages([]);
+    setSavedQuotes([]);
+    setIsComparing(false);
   };
 
   const isEmpty = messages.length === 0;
@@ -263,6 +342,11 @@ export function ContractorAnalyzer() {
                           </span>
                           {msg.flagLabel}
                         </div>
+                        {savedQuotes.length > 0 && msg.role === "assistant" && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            Quote {savedQuotes.length} saved for comparison
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -298,6 +382,37 @@ export function ContractorAnalyzer() {
           )}
         </div>
       </div>
+
+      {/* Compare banner */}
+      {savedQuotes.length >= 2 && !isComparing && (
+        <div className="flex-shrink-0 border-t border-green-100 bg-green-50 px-4 py-3">
+          <div className="max-w-3xl mx-auto flex items-center justify-between">
+            <span className="text-sm text-green-800">
+              {savedQuotes.length} quotes analyzed
+            </span>
+            <button
+              onClick={handleCompare}
+              disabled={isLoading}
+              className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                />
+              </svg>
+              Compare Quotes
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Input area */}
       <div className="flex-shrink-0 border-t border-gray-200 bg-white p-4">
