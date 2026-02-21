@@ -7,6 +7,8 @@ interface AnalysisMessage {
   role: "user" | "assistant";
   content: string;
   images?: string[];
+  flag?: "green" | "yellow" | "red" | null;
+  flagLabel?: string | null;
 }
 
 export function ContractorAnalyzer() {
@@ -86,6 +88,8 @@ export function ContractorAnalyzer() {
       const assistantMessage: AnalysisMessage = {
         role: "assistant",
         content: data.response,
+        flag: data.flag || null,
+        flagLabel: data.flagLabel || null,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -237,6 +241,30 @@ export function ContractorAnalyzer() {
                         </div>
                       )}
                     </div>
+
+                    {/* Verdict Flag Badge */}
+                    {msg.flag && msg.flagLabel && (
+                      <div className="mt-2">
+                        <div
+                          className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${
+                            msg.flag === "green"
+                              ? "bg-green-100 text-green-800 border border-green-200"
+                              : msg.flag === "yellow"
+                              ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                              : "bg-red-100 text-red-800 border border-red-200"
+                          }`}
+                        >
+                          <span className="text-lg">
+                            {msg.flag === "green"
+                              ? "\uD83D\uDFE2"
+                              : msg.flag === "yellow"
+                              ? "\uD83D\uDFE1"
+                              : "\uD83D\uDD34"}
+                          </span>
+                          {msg.flagLabel}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

@@ -31,7 +31,10 @@ When a user shares a quote:
    - Unusually low prices (could indicate cutting corners)
    - Vague descriptions of work
 5. **Questions to Ask**: Give the user specific questions to ask the contractor
-6. **Overall Assessment**: Rate the quote as Fair, Needs Negotiation, or Get Another Quote
+6. **Overall Verdict**: You MUST assign exactly ONE of these three flags:
+   - 🟢 **Green Flag** — Quote looks fair and complete. Reasonable pricing, itemized, includes warranty/timeline. Safe to move forward.
+   - 🟡 **Yellow Flag** — Quote has some concerns. Pricing may be high on a few items, or minor info is missing. Worth negotiating or asking questions before signing.
+   - 🔴 **Red Flag** — Significant issues. Major overpricing, no itemization, missing critical info (permits, warranty), or multiple red flags. Get another quote before proceeding.
 
 ## IMPORTANT NOTES
 - Always caveat that prices vary by region, season, and specific conditions
@@ -45,12 +48,17 @@ When a user shares a quote:
 You MUST respond with valid JSON in this exact format:
 {
   "message": "Your detailed analysis in markdown format",
+  "flag": "green",
+  "flagLabel": "Looks Good",
   "suggestions": ["Upload another quote to compare", "Ask about warranty terms", "Request itemized breakdown"]
 }
 
 Rules:
-- "message": Your full analysis using markdown headers, bullet points, and the emoji indicators above
+- "message": Your full analysis using markdown headers, bullet points, and the emoji indicators above. End your message with the overall verdict section using the flag emoji and explanation.
+- "flag": One of "green", "yellow", or "red". This represents your overall verdict.
+- "flagLabel": A short 2-4 word label for the verdict. Examples: "Looks Good", "Needs Attention", "Get Another Quote", "Fair Deal", "Overpriced", "Missing Key Info"
 - "suggestions": 2-4 contextual next-step options
+- If you don't have enough info to give a verdict yet (e.g. user is just chatting, no quote shared), omit the flag and flagLabel fields.
 
 IMPORTANT: Only output the JSON object, nothing else. No markdown code blocks around it.`;
 
@@ -146,6 +154,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         response: structured.message,
+        flag: structured.flag || null,
+        flagLabel: structured.flagLabel || null,
         suggestions: structured.suggestions || [],
       });
     } catch {
