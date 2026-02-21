@@ -236,7 +236,7 @@ export function ContractorAnalyzer() {
                       {msg.role === "user" ? (
                         <p className="whitespace-pre-wrap">{msg.content}</p>
                       ) : (
-                        <div className="prose prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-li:my-0.5 prose-strong:text-gray-900">
+                        <div className="prose prose-sm max-w-none prose-headings:mt-5 prose-headings:mb-2 prose-headings:text-gray-900 prose-h2:text-base prose-h2:font-bold prose-h3:text-sm prose-h3:font-semibold prose-p:my-3 prose-ul:my-3 prose-ol:my-3 prose-li:my-1 prose-strong:text-gray-900 prose-hr:my-4">
                           <ReactMarkdown>{msg.content}</ReactMarkdown>
                         </div>
                       )}
