@@ -18,7 +18,7 @@ export interface Project {
 const STORAGE_KEY = "kenai_projects";
 
 function generateId(): string {
-  return `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `project_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 }
 
 export function getProjects(): Project[] {
@@ -98,7 +98,17 @@ function saveProjects(projects: Project[]): void {
   if (typeof window === "undefined") return;
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    // Strip base64 image data before saving - phone photos can be 5MB+
+    // which blows up localStorage's ~5MB limit
+    const stripped = projects.map((p) => ({
+      ...p,
+      messages: p.messages.map((m) => ({
+        ...m,
+        // Replace full base64 with a flag so we know an image was attached
+        image: m.image ? "[image attached]" : undefined,
+      })),
+    }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stripped));
   } catch (e) {
     console.error("Failed to save projects:", e);
   }
