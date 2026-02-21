@@ -1,7 +1,7 @@
 export interface Message {
   role: "user" | "assistant";
   content: string;
-  image?: string;
+  images?: string[];
   suggestions?: string[];
 }
 
@@ -105,7 +105,7 @@ function saveProjects(projects: Project[]): void {
       messages: p.messages.map((m) => ({
         ...m,
         // Replace full base64 with a flag so we know an image was attached
-        image: m.image ? "[image attached]" : undefined,
+        images: m.images && m.images.length > 0 ? ["[image attached]"] : undefined,
       })),
     }));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stripped));

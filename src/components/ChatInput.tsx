@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback } from "react";
 
 interface ChatInputProps {
-  onSend: (message: string, image?: string) => void;
+  onSend: (message: string, images?: string[]) => void;
   isLoading: boolean;
   placeholder?: string;
 }
@@ -14,41 +14,40 @@ export function ChatInput({
   placeholder = "Describe your issue or ask a question...",
 }: ChatInputProps) {
   const [message, setMessage] = useState("");
-  const [image, setImage] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
 
-      if (!file.type.startsWith("image/")) {
-        alert("Please select an image file");
-        return;
+      Array.from(files).forEach((file) => {
+        if (!file.type.startsWith("image/")) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          setImages((prev) => [...prev, event.target?.result as string]);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // Reset file input so same file can be re-selected
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
       }
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setImage(event.target?.result as string);
-      };
-      reader.readAsDataURL(file);
     },
     []
   );
 
   const handleSubmit = useCallback(() => {
-    if ((!message.trim() && !image) || isLoading) return;
+    if ((!message.trim() && images.length === 0) || isLoading) return;
 
-    onSend(message.trim(), image || undefined);
+    onSend(message.trim(), images.length > 0 ? images : undefined);
     setMessage("");
-    setImage(null);
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  }, [message, image, isLoading, onSend]);
+    setImages([]);
+  }, [message, images, isLoading, onSend]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -60,30 +59,31 @@ export function ChatInput({
     [handleSubmit]
   );
 
-  const removeImage = useCallback(() => {
-    setImage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
+  const removeImage = useCallback((index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   return (
     <div className="border-t border-gray-200 bg-white p-4">
-      {/* Image preview */}
-      {image && (
-        <div className="mb-3 relative inline-block">
-          <img
-            src={image}
-            alt="To attach"
-            className="max-h-32 rounded-lg border border-gray-200"
-          />
-          <button
-            onClick={removeImage}
-            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
-            aria-label="Remove image"
-          >
-            ×
-          </button>
+      {/* Image previews */}
+      {images.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {images.map((img, index) => (
+            <div key={index} className="relative inline-block">
+              <img
+                src={img}
+                alt={`Attachment ${index + 1}`}
+                className="max-h-24 rounded-lg border border-gray-200"
+              />
+              <button
+                onClick={() => removeImage(index)}
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                aria-label="Remove image"
+              >
+                ×
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -93,7 +93,7 @@ export function ChatInput({
           onClick={() => fileInputRef.current?.click()}
           disabled={isLoading}
           className="flex-shrink-0 p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Attach image"
+          title="Attach photos"
         >
           <svg
             className="w-6 h-6"
@@ -112,6 +112,7 @@ export function ChatInput({
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -133,7 +134,7 @@ export function ChatInput({
         {/* Send button */}
         <button
           onClick={handleSubmit}
-          disabled={isLoading || (!message.trim() && !image)}
+          disabled={isLoading || (!message.trim() && images.length === 0)}
           className="flex-shrink-0 bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
         >
           {isLoading ? (
@@ -172,7 +173,8 @@ export function ChatInput({
       </div>
 
       <p className="text-xs text-gray-400 mt-2 text-center">
-        Press Enter to send, Shift+Enter for new line. Attach photos anytime.
+        Press Enter to send, Shift+Enter for new line. Attach multiple photos
+        anytime.
       </p>
     </div>
   );

@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
-  image?: string;
+  images?: string[];
   suggestions?: string[];
   onSuggestionClick?: (suggestion: string) => void;
   showSuggestions?: boolean;
@@ -14,7 +14,7 @@ interface ChatMessageProps {
 export function ChatMessage({
   role,
   content,
-  image,
+  images,
   suggestions,
   onSuggestionClick,
   showSuggestions = false,
@@ -31,21 +31,37 @@ export function ChatMessage({
               : "bg-white border border-gray-200 text-gray-800"
           }`}
         >
-          {image && (
-            <div className="mb-2">
-              {image === "[image attached]" ? (
-                <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg text-sm text-gray-500">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Photo attached
-                </div>
-              ) : (
-                <img
-                  src={image}
-                  alt="Attached"
-                  className="max-w-full max-h-64 rounded-lg"
-                />
+          {images && images.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {images.map((img, i) =>
+                img === "[image attached]" ? (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg text-sm text-gray-500"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    Photo attached
+                  </div>
+                ) : (
+                  <img
+                    key={i}
+                    src={img}
+                    alt={`Attached ${i + 1}`}
+                    className="max-h-48 rounded-lg"
+                  />
+                )
               )}
             </div>
           )}

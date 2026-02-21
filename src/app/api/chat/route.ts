@@ -118,7 +118,7 @@ IMPORTANT: Only output the JSON object, nothing else. No markdown code blocks ar
 interface Message {
   role: "user" | "assistant";
   content: string;
-  image?: string;
+  images?: string[];
 }
 
 interface StructuredResponse {
@@ -141,35 +141,36 @@ export async function POST(request: NextRequest) {
 
     // Convert messages to Anthropic format
     const anthropicMessages: Anthropic.MessageParam[] = messages.map((msg) => {
-      if (msg.image) {
-        // Extract base64 data and media type
-        const matches = msg.image.match(/^data:(.+);base64,(.+)$/);
-        if (matches) {
-          const mediaType = matches[1] as
-            | "image/jpeg"
-            | "image/png"
-            | "image/gif"
-            | "image/webp";
-          const base64Data = matches[2];
+      if (msg.images && msg.images.length > 0) {
+        const contentParts: Anthropic.ContentBlockParam[] = [];
 
-          return {
-            role: msg.role,
-            content: [
-              {
-                type: "image" as const,
-                source: {
-                  type: "base64" as const,
-                  media_type: mediaType,
-                  data: base64Data,
-                },
+        for (const img of msg.images) {
+          const matches = img.match(/^data:(.+);base64,(.+)$/);
+          if (matches) {
+            contentParts.push({
+              type: "image" as const,
+              source: {
+                type: "base64" as const,
+                media_type: matches[1] as
+                  | "image/jpeg"
+                  | "image/png"
+                  | "image/gif"
+                  | "image/webp",
+                data: matches[2],
               },
-              {
-                type: "text" as const,
-                text: msg.content || "Please look at this image.",
-              },
-            ],
-          };
+            });
+          }
         }
+
+        contentParts.push({
+          type: "text" as const,
+          text: msg.content || "Please look at these images.",
+        });
+
+        return {
+          role: msg.role,
+          content: contentParts,
+        };
       }
 
       return {
