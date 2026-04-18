@@ -139,19 +139,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Valid media types accepted by the Anthropic API
+    const VALID_MEDIA_TYPES = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ]);
+
+    // Normalize media types that browsers may report differently
+    function normalizeMediaType(type: string): string {
+      const normalized = type.toLowerCase().trim();
+      // Common browser variants
+      if (normalized === "image/jpg") return "image/jpeg";
+      return normalized;
+    }
+
     // Convert messages to Anthropic format
     const anthropicMessages: Anthropic.MessageParam[] = messages.map((msg) => {
-      if (msg.images && msg.images.length > 0) {
+      // Filter out placeholder image strings from localStorage
+      const realImages = msg.images?.filter(
+        (img) => img.startsWith("data:image/")
+      );
+
+      if (realImages && realImages.length > 0) {
         const contentParts: Anthropic.ContentBlockParam[] = [];
 
-        for (const img of msg.images) {
-          const matches = img.match(/^data:(.+);base64,(.+)$/);
+        for (const img of realImages) {
+          const matches = img.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
           if (matches) {
+            const mediaType = normalizeMediaType(matches[1]);
+            if (!VALID_MEDIA_TYPES.has(mediaType)) {
+              console.warn(`Unsupported image type: ${matches[1]}, skipping`);
+              continue;
+            }
             contentParts.push({
               type: "image" as const,
               source: {
                 type: "base64" as const,
-                media_type: matches[1] as
+                media_type: mediaType as
                   | "image/jpeg"
                   | "image/png"
                   | "image/gif"

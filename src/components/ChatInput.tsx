@@ -18,27 +18,67 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Convert an image file to a JPEG data URL via canvas to ensure
+  // a format the Anthropic API accepts (handles HEIC, BMP, etc.)
+  const toSupportedDataUrl = useCallback(
+    (file: File): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("Canvas not supported"));
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = URL.createObjectURL(file);
+      }),
+    []
+  );
+
+  const SUPPORTED_TYPES = new Set([
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+  ]);
+
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
-      Array.from(files).forEach((file) => {
-        if (!file.type.startsWith("image/")) return;
+      const fileList: File[] = Array.from(files);
+      for (const file of fileList) {
+        if (!file.type.startsWith("image/")) continue;
+
+        // If the browser reports a type Anthropic doesn't accept (e.g. HEIC),
+        // re-encode through a canvas so we always send JPEG/PNG/GIF/WebP.
+        if (!SUPPORTED_TYPES.has(file.type)) {
+          toSupportedDataUrl(file).then((dataUrl: string) => {
+            setImages((prev) => [...prev, dataUrl]);
+          }).catch(() => {
+            console.warn("Could not convert image, skipping:", file.name);
+          });
+          continue;
+        }
 
         const reader = new FileReader();
         reader.onload = (event) => {
           setImages((prev) => [...prev, event.target?.result as string]);
         };
         reader.readAsDataURL(file);
-      });
+      }
 
       // Reset file input so same file can be re-selected
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     },
-    []
+    [toSupportedDataUrl]
   );
 
   const handleSubmit = useCallback(() => {
