@@ -111,8 +111,23 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      // Send all messages (except the welcome message) to the API
-      const conversationHistory = [...messages.slice(1), userMessage];
+      // Send all messages (except the welcome message) to the API.
+      // Strip base64 image data from PREVIOUS messages to keep the
+      // payload under Vercel's 4.5 MB body-size limit — only the
+      // current message sends full image data.
+      const conversationHistory = [...messages.slice(1), userMessage].map(
+        (msg, idx, arr) => {
+          const isLatest = idx === arr.length - 1;
+          if (!isLatest && msg.images && msg.images.length > 0) {
+            return {
+              ...msg,
+              images: undefined,
+              content: msg.content + "\n\n(photos were shared earlier)",
+            };
+          }
+          return msg;
+        }
+      );
 
       const response = await fetch("/api/chat", {
         method: "POST",
