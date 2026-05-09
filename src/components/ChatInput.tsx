@@ -18,33 +18,41 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Convert an image file to a JPEG data URL via canvas to ensure
-  // a format the Anthropic API accepts (handles HEIC, BMP, etc.)
-  const toSupportedDataUrl = useCallback(
+  // Resize + re-encode every image as JPEG so:
+  //   1. Format is always one Anthropic accepts (handles HEIC etc.)
+  //   2. Payload stays small enough that multiple photos in one
+  //      message fit under Vercel's 4.5 MB body-size limit.
+  // 1568px is Anthropic's recommended max long edge — beyond that
+  // the model downsamples anyway.
+  const MAX_DIMENSION = 1568;
+  const JPEG_QUALITY = 0.82;
+
+  const compressImage = useCallback(
     (file: File): Promise<string> =>
       new Promise((resolve, reject) => {
         const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
         img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          const { width, height } = img;
+          const longEdge = Math.max(width, height);
+          const scale = longEdge > MAX_DIMENSION ? MAX_DIMENSION / longEdge : 1;
           const canvas = document.createElement("canvas");
-          canvas.width = img.width;
-          canvas.height = img.height;
+          canvas.width = Math.round(width * scale);
+          canvas.height = Math.round(height * scale);
           const ctx = canvas.getContext("2d");
           if (!ctx) return reject(new Error("Canvas not supported"));
-          ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL("image/jpeg", 0.85));
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", JPEG_QUALITY));
         };
-        img.onerror = () => reject(new Error("Failed to load image"));
-        img.src = URL.createObjectURL(file);
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Failed to load image"));
+        };
+        img.src = objectUrl;
       }),
     []
   );
-
-  const SUPPORTED_TYPES = new Set([
-    "image/jpeg",
-    "image/png",
-    "image/gif",
-    "image/webp",
-  ]);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,22 +63,13 @@ export function ChatInput({
       for (const file of fileList) {
         if (!file.type.startsWith("image/")) continue;
 
-        // If the browser reports a type Anthropic doesn't accept (e.g. HEIC),
-        // re-encode through a canvas so we always send JPEG/PNG/GIF/WebP.
-        if (!SUPPORTED_TYPES.has(file.type)) {
-          toSupportedDataUrl(file).then((dataUrl: string) => {
+        compressImage(file)
+          .then((dataUrl: string) => {
             setImages((prev) => [...prev, dataUrl]);
-          }).catch(() => {
-            console.warn("Could not convert image, skipping:", file.name);
+          })
+          .catch(() => {
+            console.warn("Could not process image, skipping:", file.name);
           });
-          continue;
-        }
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          setImages((prev) => [...prev, event.target?.result as string]);
-        };
-        reader.readAsDataURL(file);
       }
 
       // Reset file input so same file can be re-selected
@@ -78,7 +77,7 @@ export function ChatInput({
         fileInputRef.current.value = "";
       }
     },
-    [toSupportedDataUrl]
+    [compressImage]
   );
 
   const handleSubmit = useCallback(() => {
