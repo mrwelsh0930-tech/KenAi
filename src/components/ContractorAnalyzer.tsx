@@ -23,25 +23,60 @@ export function ContractorAnalyzer() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Resize + re-encode every image as JPEG so the format is always
+  // one Anthropic accepts and the payload stays under Vercel's
+  // 4.5 MB body-size limit even with multiple photos.
+  const compressImage = useCallback(
+    (file: File): Promise<string> =>
+      new Promise((resolve, reject) => {
+        const MAX_DIMENSION = 1568;
+        const JPEG_QUALITY = 0.82;
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          const { width, height } = img;
+          const longEdge = Math.max(width, height);
+          const scale = longEdge > MAX_DIMENSION ? MAX_DIMENSION / longEdge : 1;
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(width * scale);
+          canvas.height = Math.round(height * scale);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return reject(new Error("Canvas not supported"));
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", JPEG_QUALITY));
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Failed to load image"));
+        };
+        img.src = objectUrl;
+      }),
+    []
+  );
+
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
-      Array.from(files).forEach((file) => {
-        if (!file.type.startsWith("image/")) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          setImages((prev) => [...prev, event.target?.result as string]);
-        };
-        reader.readAsDataURL(file);
-      });
+      const fileList: File[] = Array.from(files);
+      for (const file of fileList) {
+        if (!file.type.startsWith("image/")) continue;
+        compressImage(file)
+          .then((dataUrl: string) => {
+            setImages((prev) => [...prev, dataUrl]);
+          })
+          .catch(() => {
+            console.warn("Could not process image, skipping:", file.name);
+          });
+      }
 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     },
-    []
+    [compressImage]
   );
 
   const removeImage = useCallback((index: number) => {

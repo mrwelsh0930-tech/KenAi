@@ -151,23 +151,38 @@ export async function POST(request: NextRequest) {
     // Build current user message
     const contentParts: Anthropic.ContentBlockParam[] = [];
 
+    const VALID_MEDIA_TYPES = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ]);
+
     if (images && images.length > 0) {
       for (const img of images) {
-        const matches = img.match(/^data:(.+);base64,(.+)$/);
-        if (matches) {
-          contentParts.push({
-            type: "image" as const,
-            source: {
-              type: "base64" as const,
-              media_type: matches[1] as
-                | "image/jpeg"
-                | "image/png"
-                | "image/gif"
-                | "image/webp",
-              data: matches[2],
-            },
-          });
+        if (!img.startsWith("data:image/")) continue;
+        const matches = img.match(
+          /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/
+        );
+        if (!matches) continue;
+        let mediaType = matches[1].toLowerCase().trim();
+        if (mediaType === "image/jpg") mediaType = "image/jpeg";
+        if (!VALID_MEDIA_TYPES.has(mediaType)) {
+          console.warn(`Unsupported image type: ${matches[1]}, skipping`);
+          continue;
         }
+        contentParts.push({
+          type: "image" as const,
+          source: {
+            type: "base64" as const,
+            media_type: mediaType as
+              | "image/jpeg"
+              | "image/png"
+              | "image/gif"
+              | "image/webp",
+            data: matches[2],
+          },
+        });
       }
     }
 
